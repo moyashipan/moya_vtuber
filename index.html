@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="ja">
+	<head>
+		<title>moya_vtuber</title>
+		<meta charset="utf-8">
+		<script src="./javascripts/clmtrackr/examples/js/libs/utils.js"></script>
+		<script src="./javascripts/clmtrackr/build/clmtrackr.js"></script>
+		<script src="./javascripts/clmtrackr/models/model_pca_20_svm.js"></script>
+		<script src="https://aframe.io/releases/0.7.1/aframe.min.js"></script>
+		<style>
+			#overlay {
+				position: absolute;
+				top: 0px;
+				left: 0px;
+				-o-transform : scaleX(-1);
+				-webkit-transform : scaleX(-1);
+				transform : scaleX(-1);
+				-ms-filter : fliph; /*IE*/
+				filter : fliph; /*IE*/
+			}
+			#videoel {
+				-o-transform : scaleX(-1);
+				-webkit-transform : scaleX(-1);
+				transform : scaleX(-1);
+				-ms-filter : fliph; /*IE*/
+				filter : fliph; /*IE*/
+			}
+			#container {
+				position : relative;
+				width : 370px;
+				/*margin : 0px auto;*/
+			}
+			a-scene {
+				width: 533px;
+				height: 300px;
+			}
+		</style>
+	</head>
+	<body>
+		<div id="container">
+			<video id="videoel" width="400" height="300" preload="auto" loop playsinline autoplay></video>
+			<canvas id="overlay" width="400" height="300"></canvas>
+		</div>
+		<input class="btn" type="button" value="wait, loading video" disabled="disabled" onclick="startVideo()" id="startbutton"></input>
+
+		<script>
+			var vid = document.getElementById('videoel');
+			var vid_width = vid.width;
+			var vid_height = vid.height;
+			var vid_center_x = vid_width / 2;
+			var vid_center_y = vid_height / 2;
+			var overlay = document.getElementById('overlay');
+			var overlayCC = overlay.getContext('2d');
+
+			/*********** Setup of video/webcam and checking for webGL support *********/
+
+			function enablestart() {
+				var startbutton = document.getElementById('startbutton');
+				startbutton.value = "start";
+				startbutton.disabled = null;
+			}
+
+			function adjustVideoProportions() {
+				// resize overlay and video if proportions of video are not 4:3
+				// keep same height, just change width
+				var proportion = vid.videoWidth/vid.videoHeight;
+				vid_width = Math.round(vid_height * proportion);
+				vid_center_x = vid_width / 2;
+				vid.width = vid_width;
+				overlay.width = vid_width;
+			}
+
+			function gumSuccess( stream ) {
+				// add camera stream if getUserMedia succeeded
+				if ("srcObject" in vid) {
+					vid.srcObject = stream;
+				} else {
+					vid.src = (window.URL && window.URL.createObjectURL(stream));
+				}
+				vid.onloadedmetadata = function() {
+					adjustVideoProportions();
+					vid.play();
+				}
+				vid.onresize = function() {
+					adjustVideoProportions();
+					if (trackingStarted) {
+						ctrack.stop();
+						ctrack.reset();
+						ctrack.start(vid);
+					}
+				}
+			}
+
+			function gumFail() {
+				document.getElementById('gum').className = "hide";
+				document.getElementById('nogum').className = "nohide";
+				alert("There was some problem trying to fetch video from your webcam, using a fallback video instead.");
+			}
+
+			navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia || navigator.msGetUserMedia;
+			window.URL = window.URL || window.webkitURL || window.msURL || window.mozURL;
+
+			// set up video
+			if (navigator.mediaDevices) {
+				navigator.mediaDevices.getUserMedia({video : true}).then(gumSuccess).catch(gumFail);
+			} else if (navigator.getUserMedia) {
+				navigator.getUserMedia({video : true}, gumSuccess, gumFail);
+			} else {
+				document.getElementById('gum').className = "hide";
+				document.getElementById('nogum').className = "nohide";
+				alert("Your browser does not seem to support getUserMedia, using a fallback video instead.");
+			}
+
+			vid.addEventListener('canplay', enablestart, false);
+
+			/*********** Code for face tracking *********/
+
+			var ctrack = new clm.tracker();
+			ctrack.init();
+			var trackingStarted = false;
+
+			function startVideo() {
+				// start video
+				vid.play();
+				// start tracking
+				ctrack.start(vid);
+				trackingStarted = true;
+
+				// start loop to draw face
+				drawLoop();
+			}
+
+			function drawLoop() {
+				requestAnimFrame(drawLoop);
+				overlayCC.clearRect(0, 0, vid_width, vid_height);
+				//psrElement.innerHTML = "score :" + ctrack.getScore().toFixed(4);
+				var positions = ctrack.getCurrentPosition()
+				if (positions) {
+					ctrack.draw(overlay);
+
+					// Head Position
+					var p2 = positions[33], p1 = positions[7];
+					var head = document.querySelector('#head');
+					var headPosition = head.getAttribute('position');
+					headPosition.x = (vid_center_x - (p2[0] + p2[0]) / 2) * 0.01;
+					headPosition.y = (vid_center_y - (p2[1] + p2[1]) / 2) * 0.01;
+					head.setAttribute('position', headPosition);
+
+					// Head Position
+					var p2 = positions[27], p1 = positions[32];
+					var headRotation = head.getAttribute('rotation');
+					headRotation.z = Math.atan2(p1[1] - p2[1], p1[0] - p2[0]) * 180 / Math.PI;
+					head.setAttribute('rotation', headRotation);
+
+					// Mouth
+					var p2 = positions[60], p1 = positions[57];
+					var mouth = document.querySelector('#mouth');
+					var mouthPosition = mouth.getAttribute('position');
+					mouthPosition.y = -Math.sqrt(Math.pow(p1[0] - p2[0], 2) + Math.pow(p1[1] - p2[1], 2)) * 0.01;
+					mouth.setAttribute('position', mouthPosition);
+
+					// Eyebrow
+					var p2 = positions[33], p1 = positions[22];
+					var eyebrow = document.querySelector('#eyebrow');
+					var eyebrowPosition = eyebrow.getAttribute('position');
+					// TODO: 顔の縦幅に対する相対距離にする
+					eyebrowPosition.y = (Math.sqrt(Math.pow(p1[0] - p2[0], 2) + Math.pow(p1[1] - p2[1], 2)) - 18.0) * 0.03;
+					eyebrow.setAttribute('position', eyebrowPosition);
+				}
+			}
+		</script>
+
+		<a-scene embedded vr-mode-ui="enabled: false" fov="60">
+			<a-plane width="53" height="30" color="#00ff00" rotation="0 0 0" position="0 0 -18"></a-plane>
+
+			<a-entity id="head" position="0 0 -2">
+				<a-sphere color='#ffffff' position="0 0 0" radius="1" scale="1.2 1.0 1.2"></a-sphere>
+
+				<a-sphere color='#ffffff' position="-0.15 -0.1 1.15" radius="0.18"></a-sphere>
+				<a-sphere color='#ffffff' position="0.15 -0.1 1.15" radius="0.18"></a-sphere>
+				<a-entity id="mouth">
+					<a-sphere color='#ff0000' position="0.0 -0.1 1.12" radius="0.1"></a-sphere>
+				</a-entity>
+
+				<a-sphere id="eye-left" color='#000000' position="-0.35 0.08 1.12" radius="0.05"></a-sphere>
+				<a-sphere id="eye-right" color='#000000' position="0.35 0.08 1.12" radius="0.05"></a-sphere>
+
+				<a-entity id="eyebrow">
+					<a-cylinder id="eyebrow-left" color='#000000' rotation="0 0 90" position="-0.35 0.22 1.17" height="0.2" radius="0.03"></a-cylinder>
+					<a-cylinder id="eyebrow-right" color='#000000' rotation="0 0 -90" position="0.35 0.22 1.17" height="0.2" radius="0.03"></a-cylinder>
+				</a-entity>
+			</a-entity>
+
+			<a-camera position="0 0 0" user-height="0"></a-camera>
+
+			<a-light type="ambient" color="#ddd"></a-light>
+			<a-light type="directional" color="#FFF" intensity="0.6" position="0 2.5 0"></a-light>
+		</a-scene>
+	</body>
+</html>
