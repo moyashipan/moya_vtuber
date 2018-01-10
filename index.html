@@ -3,6 +3,7 @@
 	<head>
 		<title>moya_vtuber</title>
 		<meta charset="utf-8">
+		<script src="./javascripts/tracking.js/build/tracking.js"></script>
 		<script src="./javascripts/clmtrackr/examples/js/libs/utils.js"></script>
 		<script src="./javascripts/clmtrackr/build/clmtrackr.js"></script>
 		<script src="./javascripts/clmtrackr/models/model_pca_20_svm.js"></script>
@@ -28,11 +29,13 @@
 			#container {
 				position : relative;
 				width : 370px;
-				/*margin : 0px auto;*/
 			}
 			a-scene {
 				width: 533px;
 				height: 300px;
+			}
+			ul {
+				font-size: 10px;
 			}
 		</style>
 	</head>
@@ -51,6 +54,10 @@
 			var vid_center_y = vid_height / 2;
 			var overlay = document.getElementById('overlay');
 			var overlayCC = overlay.getContext('2d');
+
+			var tracker = new tracking.ColorTracker();
+			tracking.track(vid, tracker, { camera: true });
+			tracker.setColors(['yellow']);
 
 			/*********** Setup of video/webcam and checking for webGL support *********/
 
@@ -126,6 +133,19 @@
 				ctrack.start(vid);
 				trackingStarted = true;
 
+				// 色で探す
+				tracker.on('track', function(event) {
+					event.data.forEach(function(rect) {
+						var x = rect.x + rect.width / 2;
+						var y = rect.y + rect.height / 2;
+						var hand = document.querySelector('#hand');
+						var handPosition = hand.getAttribute('position');
+						handPosition.x = (vid_center_x - x) * 0.01;
+						handPosition.y = (vid_center_y - y) * 0.01;
+						hand.setAttribute('position', handPosition);
+					});
+				});
+
 				// start loop to draw face
 				drawLoop();
 			}
@@ -171,7 +191,7 @@
 		</script>
 
 		<a-scene embedded vr-mode-ui="enabled: false" fov="60">
-			<a-plane width="53" height="30" color="#00ff00" rotation="0 0 0" position="0 0 -18"></a-plane>
+			<a-plane width="53" height="30" color="#00ff00" rotation="0 0 0" position="0 0 -17.5"></a-plane>
 
 			<a-entity id="head" position="0 0 -2">
 				<a-sphere color='#ffffff' position="0 0 0" radius="1" scale="1.2 1.0 1.2"></a-sphere>
@@ -191,10 +211,19 @@
 				</a-entity>
 			</a-entity>
 
+			<a-entity position="0 0 -1">
+				<a-sphere id="hand" color='#ffffff' position="0.8 -0.5 0" radius="0.18"></a-sphere>
+			</a-entity>
+
 			<a-camera position="0 0 0" user-height="0"></a-camera>
 
 			<a-light type="ambient" color="#ddd"></a-light>
 			<a-light type="directional" color="#FFF" intensity="0.6" position="0 2.5 0"></a-light>
 		</a-scene>
+
+		<ul>
+			<li>顔の向き、まゆげ、口が動くよ</li>
+			<li>黄色い物があったら手が動くよ</li>
+		</ul>
 	</body>
 </html>
