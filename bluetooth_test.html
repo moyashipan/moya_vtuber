@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ja">
+	<head>
+		<title>web bluetooth api demo</title>
+		<meta charset="utf-8">
+		<style>
+		</style>
+	</head>
+	<body>
+		<script>
+			const SERVICE_UUID =        '500c0001-164a-4d7a-a6cc-57301b115071';
+			const CHARACTERISTIC_UUID = '500c0002-164a-4d7a-a6cc-57301b115071';
+			var myCharacteristic;
+
+			function connectDevice() {
+				navigator.bluetooth.requestDevice({
+					filters: [
+						{
+							services: [
+								SERVICE_UUID
+							]
+						}
+					]
+				})
+					.then(device => {
+						console.log("デバイスを選択しました。接続します。");
+						console.log("デバイス名 : " + device.name);
+						console.log("ID : " + device.id);
+
+						// 選択したデバイスに接続
+						return device.gatt.connect();
+					})
+					.then(server => {
+						console.log("デバイスへの接続に成功しました。サービスを取得します。");
+
+						// UUIDに合致するサービス(機能)を取得
+						return server.getPrimaryService(SERVICE_UUID);
+					})
+					.then(service => {
+						console.log("サービスの取得に成功しました。キャラクタリスティックを取得します。");
+
+						// UUIDに合致するキャラクタリスティック(サービスが扱うデータ)を取得
+						return service.getCharacteristic(CHARACTERISTIC_UUID);
+					})
+					.then(characteristic => {
+						myCharacteristic = characteristic;
+
+						console.log("キャラクタリスティックの取得に成功しました。");
+
+						console.log("BLE接続が完了しました。");
+						setInterval(_ => {
+							characteristic.readValue().then(value => {
+								var a = new Uint8Array(value.buffer);
+								var b = [];
+								a.forEach((v, i) => {
+									b[i] = ('00000000' + v.toString(2)).slice(-8);
+								});
+								console.log(b.join());
+							});
+						}, 500);
+					})
+					.catch(error => {
+						console.log("Error : " + error);
+					});
+			};
+		</script>
+
+		<input type="button" value="connect" onclick="connectDevice()" id="startbutton"></input>
+	</body>
+</html>
